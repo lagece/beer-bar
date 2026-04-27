@@ -6,6 +6,7 @@
 <title>啤酒吧 · 月度損益表</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Noto+Sans+TC:wght@300;400;500;700&family=Bebas+Neue&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root {
   --gold: #C9A84C; --gold-light: #E8CC7A; --gold-dim: #8A6F2E;
@@ -99,7 +100,96 @@ input[type=range]::-webkit-slider-thumb:hover { transform:scale(1.25); }
 .pos-val { color:#C0DD97; } .neg-val { color:#F09595; }
 .blank-row td { height:6px; background:var(--dark); border:none; }
 
+
+/* ── MOBILE TAB BAR ── */
+.mob-tabs {
+  display: none;
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 100;
+  background: #0D0B07;
+  border-top: 1px solid rgba(201,168,76,0.2);
+  padding: 0;
+  grid-template-columns: repeat(3, 1fr);
+}
+.mob-tab {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 10px 4px 12px;
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 11px; color: var(--muted);
+  cursor: pointer; border: none; background: transparent;
+  gap: 4px; transition: color .2s;
+  -webkit-tap-highlight-color: transparent;
+}
+.mob-tab svg { opacity: .5; transition: opacity .2s; }
+.mob-tab.active { color: var(--gold); }
+.mob-tab.active svg { opacity: 1; }
+
+/* ── MOBILE PANEL VISIBILITY ── */
+@media (max-width: 768px) {
+  .page { padding: 0 16px 80px; }
+
+  header { padding: 24px 0 18px; gap: 12px; }
+  h1 { font-size: 24px; }
+  .hdr-kpis { gap: 12px; }
+  .hdr-kpi-val { font-size: 18px; }
+  .hdr-kpi-label { font-size: 10px; }
+
+  .mob-tabs { display: grid; }
+
+  .layout { display: block; margin-top: 20px; }
+
+  /* hide all panels by default on mobile */
+  .ctrl-panel { display: none; }
+  .results    { display: none; }
+
+  /* show active panel */
+  .ctrl-panel.mob-active { display: flex; }
+  .results.mob-active    { display: flex; }
+
+  /* KPI always 2x2 on mobile */
+  .kpi-row { grid-template-columns: repeat(2,1fr); }
+  .kpi-val { font-size: 18px; }
+
+  /* chart shorter on mobile */
+  .chart-wrap { height: 180px; }
+
+  /* ctrl panel not sticky on mobile */
+  .ctrl-panel { position: static; }
+
+  /* table hint */
+  .pl-box::before {
+    content: '← 左右滑動查看';
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+    padding: 8px 12px 0;
+    text-align: right;
+  }
+}
+
+/* ── EXPORT BAR ── */
+.export-bar { display:flex; justify-content:flex-end; margin-top:24px; padding:0 2px; }
+.export-btn { display:inline-flex; align-items:center; gap:8px; background:linear-gradient(135deg,#C9A84C 0%,#8A6F2E 100%); color:#0D0B07; font-family:"Noto Sans TC",sans-serif; font-size:13px; font-weight:700; border:none; border-radius:3px; padding:11px 22px; cursor:pointer; transition:opacity .2s,transform .15s; letter-spacing:.05em; }
+.export-btn:hover { opacity:.88; transform:translateY(-1px); }
+.export-btn:active { transform:translateY(0); opacity:1; }
+.export-btn.loading { opacity:.6; pointer-events:none; }
+@media(max-width:768px){ .export-bar{ justify-content:stretch; } .export-btn{ width:100%; justify-content:center; font-size:14px; padding:13px; } }
 footer { text-align:center; margin-top:48px; padding-top:20px; border-top:1px solid rgba(201,168,76,.12); font-size:11px; color:var(--muted); letter-spacing:.15em; font-weight:300; }
+
+/* Export button */
+.export-bar { display:flex; justify-content:flex-end; margin-bottom:12px; }
+.btn-export {
+  display:inline-flex; align-items:center; gap:8px;
+  background:rgba(201,168,76,0.1); border:1px solid var(--gold-dim);
+  color:var(--gold-light); font-family:'Bebas Neue',sans-serif;
+  letter-spacing:.15em; font-size:13px; padding:9px 20px;
+  border-radius:3px; cursor:pointer; transition:all .2s;
+  -webkit-tap-highlight-color:transparent;
+}
+.btn-export:hover { background:rgba(201,168,76,0.2); border-color:var(--gold); }
+.btn-export:active { transform:scale(0.97); }
+.btn-export svg { flex-shrink:0; }
 </style>
 </head>
 <body>
@@ -201,6 +291,9 @@ footer { text-align:center; margin-top:48px; padding-top:20px; border-top:1px so
     </div>
   </div>
 
+  <div class="export-bar">
+</div>
+
   <div class="pl-box">
     <table class="pl-table" id="pl-table">
       <thead>
@@ -217,6 +310,12 @@ footer { text-align:center; margin-top:48px; padding-top:20px; border-top:1px so
 </div>
 </div>
 
+<div class="export-bar">
+  <button class="export-btn" onclick="exportExcel()" id="export-btn">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>
+    匯出 Excel
+  </button>
+</div>
 <footer>未成年請勿飲酒 · 飲酒過量有礙健康 · 本試算表僅供股東內部參考 · 數字為預估值</footer>
 </div>
 
@@ -383,6 +482,175 @@ function switchChart(mode, btn) {
   document.querySelectorAll('.ctab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   calc();
+
+// ── EXCEL EXPORT ─────────────────────────────────────────
+function exportExcel() {
+  const btn = document.getElementById('export-btn');
+  btn.classList.add('loading');
+  btn.textContent = '產生中…';
+
+  // Load SheetJS on demand
+  if (typeof XLSX === 'undefined') {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = () => doExport(btn);
+    s.onerror = () => { btn.classList.remove('loading'); btn.innerHTML = '載入失敗，請重試'; };
+    document.head.appendChild(s);
+  } else {
+    doExport(btn);
+  }
+}
+
+function doExport(btn) {
+  const wb = XLSX.utils.book_new();
+
+  // ── Sheet 1: 假設參數 ──
+  const seats  = parseFloat(document.getElementById('s-seats').value);
+  const days   = parseFloat(document.getElementById('s-days').value);
+  const no_    = parseFloat(document.getElementById('s-no').value)/100;
+  const nt_    = parseFloat(document.getElementById('s-nt').value);
+  const nr_    = parseFloat(document.getElementById('s-nr').value)/100;
+  const np_    = parseFloat(document.getElementById('s-np').value);
+  const ho_    = parseFloat(document.getElementById('s-ho').value)/100;
+  const ht_    = parseFloat(document.getElementById('s-ht').value);
+  const hp_    = parseFloat(document.getElementById('s-hp').value);
+  const hu_    = parseFloat(document.getElementById('s-hu').value);
+  const hup_   = parseFloat(document.getElementById('s-hup').value)/100;
+  const eo_    = parseFloat(document.getElementById('s-eo').value)/100;
+  const et_    = parseFloat(document.getElementById('s-et').value);
+  const em_    = parseFloat(document.getElementById('s-em').value)/100;
+  const ep_    = parseFloat(document.getElementById('s-ep').value);
+  const cogs_  = parseFloat(document.getElementById('s-cogs').value)/100;
+  const rent_  = parseFloat(document.getElementById('s-rent').value);
+  const staff_ = parseFloat(document.getElementById('s-staff').value);
+  const util_  = parseFloat(document.getElementById('s-util').value);
+  const mkt_   = parseFloat(document.getElementById('s-mkt').value);
+  const misc_  = parseFloat(document.getElementById('s-misc').value);
+
+  const SEASON = [0.85, 0.90, 1.00, 1.05, 1.10, 1.05, 1.15, 1.20, 1.05, 1.10, 1.00, 1.15];
+  const MONTHS = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+
+  const params = [
+    ['參數名稱', '數值', '單位'],
+    ['── 基本 ──', '', ''],
+    ['總座位數', seats, '位'],
+    ['每月營業天數', days, '天'],
+    ['── 中午 ──', '', ''],
+    ['座位使用率', no_, ''],
+    ['翻桌次數', nt_, '輪'],
+    ['有消費比例', nr_, ''],
+    ['平均客單價', np_, '元'],
+    ['── 下午 Happy Hour ──', '', ''],
+    ['座位使用率', ho_, ''],
+    ['翻桌次數', ht_, '輪'],
+    ['客單價（中杯）', hp_, '元'],
+    ['升杯加價', hu_, '元'],
+    ['升大杯比例', hup_, ''],
+    ['── 晚上 ──', '', ''],
+    ['座位使用率', eo_, ''],
+    ['翻桌次數', et_, '輪'],
+    ['平均客單價', ep_, '元'],
+    ['晚間客單加成', em_, '倍'],
+    ['── 成本 ──', '', ''],
+    ['飲品成本率', cogs_, ''],
+    ['月租金', rent_, '元'],
+    ['月人事費用', staff_, '元'],
+    ['月水電雜支', util_, '元'],
+    ['月行銷預算', mkt_, '元'],
+    ['月雜費', misc_, '元'],
+    ['── 季節係數 ──', '', ''],
+    ...MONTHS.map((m, i) => [m + '季節係數', SEASON[i], '倍']),
+  ];
+  const ws_params = XLSX.utils.aoa_to_sheet(params);
+  ws_params['!cols'] = [{wch:20},{wch:12},{wch:8}];
+  XLSX.utils.book_append_sheet(wb, ws_params, '假設參數');
+
+  // ── Sheet 2: 月度P&L ──
+  const data = SEASON.map(sx => {
+    const revNoon  = Math.round(seats * no_ * nt_ * nr_ * np_ * sx * days);
+    const revHH    = Math.round(seats * ho_ * ht_ * (hp_ + hup_ * hu_) * sx * days);
+    const revNight = Math.round(seats * eo_ * et_ * ep_ * em_ * sx * days);
+    const rev      = revNoon + revHH + revNight;
+    const cogs     = -Math.round(rev * cogs_);
+    const gross    = rev + cogs;
+    const opex     = -(rent_ + staff_ + util_ + mkt_ + misc_);
+    const ebitda   = gross + opex;
+    const net      = ebitda;
+    const be       = (rent_ + staff_ + util_ + mkt_ + misc_) / (1 - cogs_);
+    const surplus  = rev - be;
+    return { revNoon, revHH, revNight, rev, cogs, gross, opex, ebitda, net, be, surplus };
+  });
+
+  const tot = key => data.reduce((s,d) => s + d[key], 0);
+  const totRow = key => [...data.map(d => d[key]), tot(key)];
+  const pctRow = (num, den) => [...data.map(d => d[num]/d[den]), tot(num)/tot(den)];
+
+  const header = ['項目', ...MONTHS, '全年合計'];
+  const plRows = [
+    header,
+    ['▸ 收入', ...Array(13).fill('')],
+    ['　中午收入',    ...totRow('revNoon')],
+    ['　下午 HH',    ...totRow('revHH')],
+    ['　晚上收入',   ...totRow('revNight')],
+    ['總收入',       ...totRow('rev')],
+    [],
+    ['▸ 飲品成本（COGS）', ...Array(13).fill('')],
+    ['　飲品成本',   ...totRow('cogs')],
+    ['毛利',         ...totRow('gross')],
+    ['毛利率',       ...pctRow('gross','rev')],
+    [],
+    ['▸ 營運費用（OPEX）', ...Array(13).fill('')],
+    ['　固定費用',   ...totRow('opex')],
+    [],
+    ['EBITDA',       ...totRow('ebitda')],
+    ['EBITDA Margin',...pctRow('ebitda','rev')],
+    [],
+    ['稅前淨利',     ...totRow('net')],
+    ['淨利率',       ...pctRow('net','rev')],
+    [],
+    ['▸ 損益平衡', ...Array(13).fill('')],
+    ['　損益平衡點月收入', ...data.map(d=>d.be), tot('be')],
+    ['　高出損益平衡',     ...totRow('surplus')],
+  ];
+
+  const ws_pl = XLSX.utils.aoa_to_sheet(plRows);
+
+  // format pct rows (rows 10, 16, 19 = index 9,15,18 in plRows, +1 for header)
+  const pctRowIndices = [10, 16, 19]; // 1-based
+  pctRowIndices.forEach(ri => {
+    for (let ci = 1; ci <= 13; ci++) {
+      const addr = XLSX.utils.encode_cell({r: ri, c: ci});
+      if (ws_pl[addr]) ws_pl[addr].z = '0.0%';
+    }
+  });
+
+  ws_pl['!cols'] = [{wch:22}, ...Array(12).fill({wch:11}), {wch:13}];
+  XLSX.utils.book_append_sheet(wb, ws_pl, '月度PL');
+
+  // ── Sheet 3: 摘要 ──
+  const totRev = tot('rev'), totGross = tot('gross'), totEbitda = tot('ebitda'), totNet = tot('net');
+  const summary = [
+    ['啤酒吧 · 年度摘要', ''],
+    [],
+    ['全年總收入', totRev],
+    ['全年毛利', totGross],
+    ['平均毛利率', totGross/totRev],
+    ['全年 EBITDA', totEbitda],
+    ['全年淨利', totNet],
+    ['平均淨利率', totNet/totRev],
+  ];
+  const ws_sum = XLSX.utils.aoa_to_sheet(summary);
+  ws_sum['C3'] = { z: '0.0%' };
+  ws_sum['!cols'] = [{wch:18},{wch:16}];
+  XLSX.utils.book_append_sheet(wb, ws_sum, '摘要');
+
+  // Download
+  XLSX.writeFile(wb, '啤酒吧_PL試算結果.xlsx');
+
+  btn.classList.remove('loading');
+  btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg> 匯出 Excel`;
+}
+
 }
 
 function setText(id, val) { document.getElementById(id).textContent = val; }
@@ -424,6 +692,206 @@ sliders.forEach(([sid, oid, fmt]) => {
 });
 
 calc();
+
+// Mobile tab switching
+function mobSwitch(panel, btn) {
+  if (window.innerWidth > 768) return;
+
+  document.querySelectorAll('.mob-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  const ctrl     = document.querySelector('.ctrl-panel');
+  const results  = document.querySelector('.results');
+  const kpiRow   = document.querySelector('.kpi-row');
+  const chartBox = document.querySelector('.chart-box');
+  const plBox    = document.querySelector('.pl-box');
+
+  // reset all panels
+  ctrl.classList.remove('mob-active');
+  results.classList.remove('mob-active');
+
+  if (panel === 'params') {
+    ctrl.classList.add('mob-active');
+  } else if (panel === 'results') {
+    results.classList.add('mob-active');
+    kpiRow.style.display   = '';
+    chartBox.style.display = '';
+    plBox.style.display    = 'none';
+    // redraw chart in case it was hidden during init
+    if (chart) chart.resize();
+  } else { // table
+    results.classList.add('mob-active');
+    kpiRow.style.display   = 'none';
+    chartBox.style.display = 'none';
+    plBox.style.display    = '';
+  }
+}
+
+// Init mobile state
+function initMobile() {
+  if (window.innerWidth <= 768) {
+    const ctrl    = document.querySelector('.ctrl-panel');
+    const results = document.querySelector('.results');
+    const kpiRow  = document.querySelector('.kpi-row');
+    const chartBox = document.querySelector('.chart-box');
+    const plBox   = document.querySelector('.pl-box');
+    // start on params tab
+    ctrl.classList.add('mob-active');
+    // pre-hide results sub-sections so switching is clean
+    if (plBox)    plBox.style.display    = 'none';
+    if (kpiRow)   kpiRow.style.display   = '';
+    if (chartBox) chartBox.style.display = '';
+  }
+}
+
+window.addEventListener('resize', () => {
+  const ctrl    = document.querySelector('.ctrl-panel');
+  const results = document.querySelector('.results');
+  if (window.innerWidth > 768) {
+    // restore desktop layout
+    ctrl.classList.remove('mob-active');
+    results.classList.remove('mob-active');
+    ctrl.style.display    = '';
+    results.style.display = '';
+    document.querySelector('.kpi-row').style.display   = '';
+    document.querySelector('.chart-box').style.display = '';
+    document.querySelector('.pl-box').style.display    = '';
+  }
+});
+
+initMobile();
+
+function exportExcel() {
+  const wb = XLSX.utils.book_new();
+
+  const seats = g('s-seats'), days = g('s-days');
+  const no = g('s-no')/100, nt = g('s-nt'), nr = g('s-nr')/100, np = g('s-np');
+  const ho = g('s-ho')/100, ht = g('s-ht'), hp = g('s-hp'), hu = g('s-hu'), hup = g('s-hup')/100;
+  const eo = g('s-eo')/100, et = g('s-et'), em = g('s-em')/100, ep = g('s-ep');
+  const cogsRate = g('s-cogs')/100;
+  const fixedCost = g('s-rent') + g('s-staff') + g('s-util') + g('s-mkt') + g('s-misc');
+
+  const data = SEASON.map(sx => {
+    const revNoon  = Math.round(seats * no * nt * nr * np * sx * days);
+    const revHH    = Math.round(seats * ho * ht * (hp + hup * hu) * sx * days);
+    const revNight = Math.round(seats * eo * et * ep * em * sx * days);
+    const rev      = revNoon + revHH + revNight;
+    const cogs     = -Math.round(rev * cogsRate);
+    const gross    = rev + cogs;
+    const opex     = -fixedCost;
+    const ebitda   = gross + opex;
+    const net      = ebitda;
+    const be       = Math.round(fixedCost / (1 - cogsRate));
+    const surplus  = Math.round(rev - be);
+    return { revNoon, revHH, revNight, rev, cogs, gross, opex, ebitda, net, be, surplus };
+  });
+
+  const tot = key => data.reduce((s,d) => s + d[key], 0);
+  const pctStr = (a, b) => (a/b*100).toFixed(1) + '%';
+
+  // ── Sheet 1: 月度P&L ──
+  const plRows = [
+    ['啤酒吧 · 月度損益表（P&L）', ...Array(13).fill('')],
+    ['項目', ...MONTHS, '全年合計'],
+    ['▸ 收入', ...Array(13).fill('')],
+    ['　中午收入',        ...data.map(d=>d.revNoon),            tot('revNoon')],
+    ['　下午 Happy Hour', ...data.map(d=>d.revHH),              tot('revHH')],
+    ['　晚上收入',        ...data.map(d=>d.revNight),           tot('revNight')],
+    ['總收入',            ...data.map(d=>d.rev),                tot('rev')],
+    ['', ...Array(13).fill('')],
+    ['▸ 飲品成本（COGS）', ...Array(13).fill('')],
+    ['　飲品成本',        ...data.map(d=>d.cogs),               tot('cogs')],
+    ['毛利',              ...data.map(d=>d.gross),              tot('gross')],
+    ['毛利率',            ...data.map(d=>pctStr(d.gross,d.rev)), pctStr(tot('gross'),tot('rev'))],
+    ['', ...Array(13).fill('')],
+    ['▸ 營運費用（OPEX）', ...Array(13).fill('')],
+    ['　固定費用',        ...data.map(d=>d.opex),               tot('opex')],
+    ['', ...Array(13).fill('')],
+    ['EBITDA',            ...data.map(d=>d.ebitda),             tot('ebitda')],
+    ['EBITDA Margin',     ...data.map(d=>pctStr(d.ebitda,d.rev)), pctStr(tot('ebitda'),tot('rev'))],
+    ['', ...Array(13).fill('')],
+    ['稅前淨利',          ...data.map(d=>d.net),                tot('net')],
+    ['淨利率',            ...data.map(d=>pctStr(d.net,d.rev)),  pctStr(tot('net'),tot('rev'))],
+    ['', ...Array(13).fill('')],
+    ['▸ 損益平衡', ...Array(13).fill('')],
+    ['　損益平衡點收入',  ...data.map(d=>d.be),                 tot('be')],
+    ['　高出損益平衡',    ...data.map(d=>d.surplus),            tot('surplus')],
+  ];
+
+  const ws1 = XLSX.utils.aoa_to_sheet(plRows);
+  ws1['!cols'] = [{wch:22}, ...Array(12).fill({wch:11}), {wch:12}];
+  XLSX.utils.book_append_sheet(wb, ws1, '月度PL');
+
+  // ── Sheet 2: 假設參數 ──
+  const params = [
+    ['項目', '數值', '單位'],
+    ['── 基本設定 ──','',''],
+    ['座位數', seats, '位'],
+    ['每月營業天數', days, '天'],
+    ['── 中午（外食友善）──','',''],
+    ['座位使用率', g('s-no')/100, ''],
+    ['翻桌次數', nt, '輪'],
+    ['有消費比例', g('s-nr')/100, ''],
+    ['客單價', np, '元'],
+    ['── 下午 Happy Hour ──','',''],
+    ['座位使用率', g('s-ho')/100, ''],
+    ['翻桌次數', ht, '輪'],
+    ['客單價', hp, '元'],
+    ['升杯加價', hu, '元'],
+    ['升大杯比例', g('s-hup')/100, ''],
+    ['── 晚上（定價）──','',''],
+    ['座位使用率', g('s-eo')/100, ''],
+    ['翻桌次數', et, '輪'],
+    ['客單價', ep, '元'],
+    ['晚間客單加成', g('s-em')/100, ''],
+    ['── 成本假設 ──','',''],
+    ['飲品成本率', cogsRate, ''],
+    ['月租金', g('s-rent'), '元'],
+    ['月人事費用', g('s-staff'), '元'],
+    ['月水電雜支', g('s-util'), '元'],
+    ['月行銷預算', g('s-mkt'), '元'],
+    ['月雜費', g('s-misc'), '元'],
+    ['── 季節係數 ──','',''],
+    ...MONTHS.map((m,i) => [m+'季節係數', SEASON[i], '倍']),
+  ];
+
+  const ws2 = XLSX.utils.aoa_to_sheet(params);
+  ws2['!cols'] = [{wch:22},{wch:12},{wch:6}];
+  // format pct cells in params sheet
+  [6,8,10,12,15,17,22].forEach(r => {
+    const cell = ws2[XLSX.utils.encode_cell({r, c:1})];
+    if (cell) cell.z = '0.0%';
+  });
+  XLSX.utils.book_append_sheet(wb, ws2, '假設參數');
+
+  const date = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `啤酒吧_PL_${date}.xlsx`);
+}
 </script>
+
+<!-- Mobile Tab Bar -->
+<nav class="mob-tabs" role="tablist" aria-label="頁面切換">
+  <button class="mob-tab active" onclick="mobSwitch('params',this)" aria-label="參數設定">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.8" stroke-linecap="round">
+      <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+      <line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/>
+    </svg>
+    參數
+  </button>
+  <button class="mob-tab" onclick="mobSwitch('results',this)" aria-label="結果圖表">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.8" stroke-linecap="round">
+      <rect x="3" y="3" width="18" height="18" rx="2"/>
+      <path d="M7 16l3-4 3 3 3-5"/>
+    </svg>
+    結果
+  </button>
+  <button class="mob-tab" onclick="mobSwitch('table',this)" aria-label="損益明細表">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.8" stroke-linecap="round">
+      <path d="M3 6h18M3 12h18M3 18h18M8 3v18M16 3v18"/>
+    </svg>
+    明細
+  </button>
+</nav>
+
 </body>
 </html>
